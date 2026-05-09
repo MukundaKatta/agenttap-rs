@@ -1,0 +1,37 @@
+[package]
+name = "agenttap"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+authors = ["MukundaKatta"]
+description = "Wire-level prompt introspection for LLM SDK calls. See exactly what was sent, with credentials redacted by default."
+license = "MIT"
+repository = "https://github.com/MukundaKatta/agenttap-rs"
+homepage = "https://github.com/MukundaKatta/agenttap-rs"
+documentation = "https://docs.rs/agenttap"
+readme = "README.md"
+keywords = ["llm", "anthropic", "openai", "debug", "introspection"]
+categories = ["development-tools::debugging", "api-bindings"]
+
+[features]
+default = []
+# Enable the `reqwest_middleware::Middleware` impl that auto-captures calls.
+reqwest = ["dep:reqwest", "dep:reqwest-middleware", "dep:http", "dep:bytes", "dep:anyhow"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+regex = "1"
+parking_lot = "0.12"
+similar = "2"
+async-trait = "0.1"
+
+# Optional, enabled by `reqwest` feature.
+reqwest = { version = "0.12", optional = true, default-features = false }
+reqwest-middleware = { version = "0.4", optional = true }
+http = { version = "1", optional = true }
+bytes = { version = "1", optional = true }
+anyhow = { version = "1", optional = true }
+
+[dev-dependencies]
+serde_json = "1"
