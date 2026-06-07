@@ -42,9 +42,9 @@ pub struct Redactor {
     placeholder: String,
 }
 
-impl Redactor {
+impl Default for Redactor {
     /// The default redactor: scrubs known sensitive headers and key shapes.
-    pub fn default() -> Self {
+    fn default() -> Self {
         Self {
             sensitive_headers: DEFAULT_SENSITIVE_HEADERS
                 .iter()
@@ -54,7 +54,9 @@ impl Redactor {
             placeholder: "***REDACTED***".to_string(),
         }
     }
+}
 
+impl Redactor {
     /// A no-op redactor: nothing is scrubbed. Use only for local debugging.
     pub fn none() -> Self {
         Self {
@@ -107,10 +109,7 @@ impl Redactor {
     pub fn body(&self, body: serde_json::Value) -> serde_json::Value {
         match body {
             serde_json::Value::Object(map) => {
-                let scrubbed = map
-                    .into_iter()
-                    .map(|(k, v)| (k, self.body(v)))
-                    .collect();
+                let scrubbed = map.into_iter().map(|(k, v)| (k, self.body(v))).collect();
                 serde_json::Value::Object(scrubbed)
             }
             serde_json::Value::Array(arr) => {
@@ -127,7 +126,8 @@ impl Redactor {
         let mut out: std::borrow::Cow<'a, str> = std::borrow::Cow::Borrowed(s);
         for pat in &self.value_patterns {
             if pat.is_match(&out) {
-                out = std::borrow::Cow::Owned(pat.replace_all(&out, &*self.placeholder).into_owned());
+                out =
+                    std::borrow::Cow::Owned(pat.replace_all(&out, &*self.placeholder).into_owned());
             }
         }
         out

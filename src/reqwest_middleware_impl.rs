@@ -6,7 +6,6 @@ use bytes::Bytes;
 use reqwest::{Body, Request, Response};
 use reqwest_middleware::{Middleware, Next};
 use serde_json::Value;
-use std::collections::BTreeMap;
 use std::time::Instant;
 
 /// Middleware that captures every request/response into a [`Tap`].
@@ -75,7 +74,10 @@ impl Middleware for TapMiddleware {
             }
         }
 
-        let body_bytes: Bytes = response.bytes().await.map_err(reqwest_middleware::Error::from)?;
+        let body_bytes: Bytes = response
+            .bytes()
+            .await
+            .map_err(reqwest_middleware::Error::from)?;
         let resp_body_value = parse_json_or_string(&body_bytes);
         let elapsed_ms = t0.elapsed().as_millis() as u64;
 
@@ -106,10 +108,4 @@ fn parse_json_or_string(bytes: &[u8]) -> Option<Value> {
         Ok(v) => v,
         Err(_) => Value::String(text.to_string()),
     })
-}
-
-// Hidden helper for stable BTreeMap keys when needed.
-#[allow(dead_code)]
-fn to_btreemap(v: Vec<(String, String)>) -> BTreeMap<String, String> {
-    v.into_iter().collect()
 }

@@ -2,7 +2,10 @@ use agenttap::{diff, Redactor, Tap};
 use serde_json::json;
 
 fn h(items: &[(&str, &str)]) -> Vec<(String, String)> {
-    items.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+    items
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect()
 }
 
 #[test]
@@ -13,7 +16,16 @@ fn redacts_sensitive_headers() {
         ("x-api-key", "abc123"),
         ("Content-Type", "application/json"),
     ]);
-    tap.record("POST", "https://api.example.com/x", req_h, None, 200, vec![], None, 5);
+    tap.record(
+        "POST",
+        "https://api.example.com/x",
+        req_h,
+        None,
+        200,
+        vec![],
+        None,
+        5,
+    );
     let last = tap.last().unwrap();
     assert_eq!(last.request_headers["authorization"], "***REDACTED***");
     assert_eq!(last.request_headers["x-api-key"], "***REDACTED***");
@@ -36,7 +48,10 @@ fn redacts_api_key_patterns_in_body() {
     let last = tap.last().unwrap();
     let body = last.request_body.unwrap();
     let s = body["system"].as_str().unwrap();
-    assert!(!s.contains("sk-ant-thiseekrit"), "sk-ant-... should be scrubbed");
+    assert!(
+        !s.contains("sk-ant-thiseekrit"),
+        "sk-ant-... should be scrubbed"
+    );
     assert!(s.contains("***REDACTED***"));
 }
 
@@ -132,7 +147,10 @@ fn extra_header_and_pattern() {
     let last = tap.last().unwrap();
     assert_eq!(last.request_headers["x-secret-thing"], "***REDACTED***");
     assert_eq!(last.request_headers["normal"], "value");
-    let s = last.request_body.unwrap()["payload"].as_str().unwrap().to_string();
+    let s = last.request_body.unwrap()["payload"]
+        .as_str()
+        .unwrap()
+        .to_string();
     assert!(!s.contains("super-secret-12345"));
 }
 
@@ -169,4 +187,106 @@ fn clones_share_history() {
         1,
     );
     assert_eq!(tap2.all().len(), 1);
+}
+
+#[test]
+fn custom_placeholder_is_used() {
+    let red = Redactor::default().with_placeholder("<gone>");
+    let tap = Tap::new().with_redactor(red);
+    tap.record(
+        "POST",
+        "https://api.example.com/x",
+        h(&[("Authorization", "Bearer sk-ant-secret9876543210xyz")]),
+        Some(json!({"system": "key sk-ant-thiseekrit1234567890"})),
+        200,
+        vec![],
+        None,
+        1,
+    );
+    let last = tap.last().unwrap();
+    assert_eq!(last.request_headers["authorization"], "<gone>");
+    assert!(last.request_body.unwrap()["system"]
+        .as_str()
+        .unwrap()
+        .contains("<gone>"));
+}
+
+#[test]
+fn scrubs_nested_and_array_body_values() {
+    let tap = Tap::new();
+    tap.record(
+        "POST",
+        "https://api.example.com/x",
+        Vec::<(String, String)>::new(),
+        Some(json!({
+            "messages": [
+                {"role": "user", "content": "token sk-ant-thiseekrit1234567890 here"},
+                {"role": "system", "nested": {"k": "AKIA1234567890ABCDEF"}}
+            ]
+        })),
+        200,
+        vec![],
+        None,
+        1,
+    );
+    let body = tap.last().unwrap().request_body.unwrap();
+    let arr_str = serde_json::to_string(&body).unwrap();
+    assert!(
+        !arr_str.contains("sk-ant-thiseekrit"),
+        "nested array string should be scrubbed"
+    );
+    assert!(
+        !arr_str.contains("AKIA1234567890ABCDEF"),
+        "deeply nested AWS key should be scrubbed"
+    );
+    assert!(arr_str.contains("***REDACTED***"));
+}
+
+#[test]
+fn redacts_response_side_headers_and_body() {
+    let tap = Tap::new();
+    tap.record(
+        "POST",
+        "https://api.example.com/x",
+        Vec::<(String, String)>::new(),
+        None,
+        200,
+        h(&[
+            ("Set-Cookie", "session=abc"),
+            ("Content-Type", "application/json"),
+        ]),
+        Some(json!({"leaked": "AIzaSyA12345678901234567890123456789012"})),
+        1,
+    );
+    let last = tap.last().unwrap();
+    assert_eq!(last.response_headers["set-cookie"], "***REDACTED***");
+    assert_eq!(last.response_headers["content-type"], "application/json");
+    let s = last.response_body.unwrap()["leaked"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        !s.contains("AIzaSy"),
+        "Google API key in response body should be scrubbed"
+    );
+    assert!(s.contains("***REDACTED***"));
+}
+
+#[test]
+fn reset_clears_history() {
+    let tap = Tap::new();
+    tap.record(
+        "GET",
+        "https://api.example.com/x",
+        Vec::<(String, String)>::new(),
+        None,
+        200,
+        vec![],
+        None,
+        1,
+    );
+    assert_eq!(tap.all().len(), 1);
+    tap.reset();
+    assert!(tap.last().is_none());
+    assert_eq!(tap.all().len(), 0);
 }
