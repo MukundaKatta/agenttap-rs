@@ -255,7 +255,7 @@ fn redacts_response_side_headers_and_body() {
             ("Set-Cookie", "session=abc"),
             ("Content-Type", "application/json"),
         ]),
-        Some(json!({"leaked": "AIzaSyA12345678901234567890123456789012"})),
+        Some(json!({"leaked": "AIzaSyEXAMPLE_FAKE_KEY_FOR_REDACTION_00"})),
         1,
     );
     let last = tap.last().unwrap();
